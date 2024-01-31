@@ -1,8 +1,10 @@
 ﻿using System.Security.Claims;
+using Bit.Api.AdminConsole.Models.Request.Organizations;
 using Bit.Api.Auth.Controllers;
 using Bit.Api.Auth.Models.Request;
 using Bit.Api.Auth.Models.Request.Accounts;
 using Bit.Api.Auth.Validators;
+using Bit.Api.Tools.Models.Request;
 using Bit.Api.Vault.Models.Request;
 using Bit.Core;
 using Bit.Core.AdminConsole.Repositories;
@@ -12,7 +14,6 @@ using Bit.Core.Auth.Models.Api.Request.Accounts;
 using Bit.Core.Auth.Services;
 using Bit.Core.Auth.UserFeatures.UserKey;
 using Bit.Core.Auth.UserFeatures.UserMasterPassword.Interfaces;
-using Bit.Core.Context;
 using Bit.Core.Entities;
 using Bit.Core.Enums;
 using Bit.Core.Exceptions;
@@ -20,6 +21,7 @@ using Bit.Core.Models.Data;
 using Bit.Core.Repositories;
 using Bit.Core.Services;
 using Bit.Core.Settings;
+using Bit.Core.Tools.Entities;
 using Bit.Core.Tools.Repositories;
 using Bit.Core.Tools.Services;
 using Bit.Core.Vault.Entities;
@@ -51,13 +53,15 @@ public class AccountsControllerTests : IDisposable
     private readonly ISetInitialMasterPasswordCommand _setInitialMasterPasswordCommand;
     private readonly IRotateUserKeyCommand _rotateUserKeyCommand;
     private readonly IFeatureService _featureService;
-    private readonly ICurrentContext _currentContext;
-
 
     private readonly IRotationValidator<IEnumerable<CipherWithIdRequestModel>, IEnumerable<Cipher>> _cipherValidator;
     private readonly IRotationValidator<IEnumerable<FolderWithIdRequestModel>, IEnumerable<Folder>> _folderValidator;
+    private readonly IRotationValidator<IEnumerable<SendWithIdRequestModel>, IReadOnlyList<Send>> _sendValidator;
     private readonly IRotationValidator<IEnumerable<EmergencyAccessWithIdRequestModel>, IEnumerable<EmergencyAccess>>
         _emergencyAccessValidator;
+    private readonly IRotationValidator<IEnumerable<ResetPasswordWithOrgIdRequestModel>,
+            IReadOnlyList<OrganizationUser>>
+        _resetPasswordValidator;
 
 
     public AccountsControllerTests()
@@ -78,13 +82,16 @@ public class AccountsControllerTests : IDisposable
         _setInitialMasterPasswordCommand = Substitute.For<ISetInitialMasterPasswordCommand>();
         _rotateUserKeyCommand = Substitute.For<IRotateUserKeyCommand>();
         _featureService = Substitute.For<IFeatureService>();
-        _currentContext = Substitute.For<ICurrentContext>();
         _cipherValidator =
             Substitute.For<IRotationValidator<IEnumerable<CipherWithIdRequestModel>, IEnumerable<Cipher>>>();
         _folderValidator =
             Substitute.For<IRotationValidator<IEnumerable<FolderWithIdRequestModel>, IEnumerable<Folder>>>();
+        _sendValidator = Substitute.For<IRotationValidator<IEnumerable<SendWithIdRequestModel>, IReadOnlyList<Send>>>();
         _emergencyAccessValidator = Substitute.For<IRotationValidator<IEnumerable<EmergencyAccessWithIdRequestModel>,
             IEnumerable<EmergencyAccess>>>();
+        _resetPasswordValidator = Substitute
+            .For<IRotationValidator<IEnumerable<ResetPasswordWithOrgIdRequestModel>,
+                IReadOnlyList<OrganizationUser>>>();
 
         _sut = new AccountsController(
             _globalSettings,
@@ -103,10 +110,11 @@ public class AccountsControllerTests : IDisposable
             _setInitialMasterPasswordCommand,
             _rotateUserKeyCommand,
             _featureService,
-            _currentContext,
             _cipherValidator,
             _folderValidator,
-            _emergencyAccessValidator
+            _sendValidator,
+            _emergencyAccessValidator,
+            _resetPasswordValidator
         );
     }
 
@@ -121,7 +129,7 @@ public class AccountsControllerTests : IDisposable
         var userKdfInfo = new UserKdfInformation
         {
             Kdf = KdfType.PBKDF2_SHA256,
-            KdfIterations = 5000
+            KdfIterations = AuthConstants.PBKDF2_ITERATIONS.Default
         };
         _userRepository.GetKdfInformationByEmailAsync(Arg.Any<string>()).Returns(Task.FromResult(userKdfInfo));
 
